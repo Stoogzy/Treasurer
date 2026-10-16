@@ -32,13 +32,18 @@ public static class DependencyInjection
         //            .Where(t => !t.IsGenericTypeDefinition))
         //        .AsImplementedInterfaces()
         //        .WithScopedLifetime();
+
         //});
+
+        return;
     }
 
     private static void AddValidation(IServiceCollection services)
     {
-        services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: true);
+        //services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: true);
 
-        services.Decorate(typeof(IRequestHandler<,>), typeof(ValidationHandlerDecorator<,>));
+        //services.Decorate(typeof(IRequestHandler<,>), typeof(ValidationHandlerDecorator<,>));
+
+        return;
     }
 }
