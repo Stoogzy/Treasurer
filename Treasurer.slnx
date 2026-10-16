@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Treasurer.Api/Treasurer.Api.csproj" />
+  <Project Path="Treasurer.Application/Treasurer.Application.csproj" />
+  <Project Path="Treasurer.Core/Treasurer.Core.csproj" />
+  <Project Path="Treasurer.Infrastructure/Treasurer.Infrastructure.csproj" />
+</Solution>

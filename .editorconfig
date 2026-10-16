@@ -1,0 +1,13 @@
+# C# formatting rules
+[*.cs]
+
+# Enforce File-scoped namespaces (namespace Toolbox.Core;)
+csharp_style_namespace_declarations = file_scoped:warning
+
+# Newline settings
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+
+# Require 'public' or other modifiers
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:always
