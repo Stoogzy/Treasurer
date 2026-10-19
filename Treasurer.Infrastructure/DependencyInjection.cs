@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Treasurer.Application.Common.Interfaces;
+using Treasurer.Infrastructure.Imports.Csv;
 using Treasurer.Infrastructure.Persistence;
 
 namespace Treasurer.Infrastructure;
@@ -11,6 +12,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddPersistence(configuration);
+        services.AddCsvImports();
 
         return services;
     }
@@ -23,5 +25,10 @@ public static class DependencyInjection
                 builder => builder.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)));
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
+    }
+
+    private static void AddCsvImports(this IServiceCollection services)
+    {
+        services.AddScoped<IBookwhenCsvReader, BookwhenCsvReader>();
     }
 }

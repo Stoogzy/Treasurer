@@ -3,7 +3,7 @@
 public class BookingEventEntity
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public required string EntryId { get; set; }
+    public required string BookwhenEntryId { get; set; }
     public Guid BookingId { get; set; }
     public Guid EventId { get; set; }
     public Guid AttendeeId { get; set; }

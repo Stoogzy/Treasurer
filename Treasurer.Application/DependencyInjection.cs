@@ -9,41 +9,40 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        AddRequestHandlers(services);
-        AddValidation(services);
+        services.AddRequestHandlers();
+        services.AddValidation();
 
         return services;
     }
 
-    private static void AddRequestHandlers(IServiceCollection services)
+    private static void AddRequestHandlers(this IServiceCollection services)
     {
-        //services.Scan(scan =>
-        //{
-        //    scan.FromAssemblyOf<ListAllPowerPlansQueryHandler>()
-        //        .AddClasses(classes => classes
-        //            .AssignableTo(typeof(IRequestHandler<,>))
-        //            .Where(t => !t.IsGenericTypeDefinition))
-        //        .AsImplementedInterfaces()
-        //        .WithScopedLifetime();
+        services.Scan(scan => scan.FromAssemblies(typeof(DependencyInjection).Assembly)
 
-        //    scan.FromAssemblyOf<ListAllPowerPlansQueryHandler>()
-        //        .AddClasses(classes => classes
-        //            .AssignableTo(typeof(IRequestHandler<>))
-        //            .Where(t => !t.IsGenericTypeDefinition))
-        //        .AsImplementedInterfaces()
-        //        .WithScopedLifetime();
+            .AddClasses(
+                classes => classes
+                    .AssignableTo(typeof(IRequestHandler<,>))
+                    .Where(type => !type.IsGenericTypeDefinition),
+                publicOnly: false)
+            .AsImplementedInterfaces()
+            .WithScopedLifetime()
 
-        //});
-
-        return;
+            .AddClasses(
+                classes => classes
+                    .AssignableTo(typeof(IRequestHandler<>))
+                    .Where(type => !type.IsGenericTypeDefinition),
+                publicOnly: false)
+            .AsImplementedInterfaces()
+            .WithScopedLifetime());
     }
 
-    private static void AddValidation(IServiceCollection services)
+    private static void AddValidation(this IServiceCollection services)
     {
-        //services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: true);
+        services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: true);
 
-        //services.Decorate(typeof(IRequestHandler<,>), typeof(ValidationHandlerDecorator<,>));
+        services.Decorate(typeof(IRequestHandler<,>), typeof(ValidationHandlerDecorator<,>));
 
-        return;
+        // Add this only after introducing a non-result IRequestHandler<T>.
+        // services.Decorate(typeof(IRequestHandler<>), typeof(ValidationHandlerDecorator<>));
     }
 }
