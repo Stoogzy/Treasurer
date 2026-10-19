@@ -20,13 +20,19 @@ public sealed record ListAllPaymentsByEventQuery(
         decimal Value,
         EventValueSource ValueSource);
 
+    public sealed record AllocationSummary(
+        bool IsComplete,
+        int UnresolvedBookingCount,
+        int UnresolvedEventCount);
+
     public sealed record Result(
         string EventId,
         string EventName,
         DateOnly StartDate,
         DateOnly EndDate,
         IReadOnlyList<PaymentItem> Payments,
-        decimal TotalValue);
+        decimal TotalValue,
+        AllocationSummary AllocationSummary);
 
     public sealed class Handler(IApplicationDbContext dbContext) : IRequestHandler<ListAllPaymentsByEventQuery, Result>
     {
@@ -90,6 +96,24 @@ public sealed record ListAllPaymentsByEventQuery(
                     payment.ValueSource))
                 .ToList();
 
+            List<Guid> unresolvedBookingIds = await dbContext.BookingEvents
+                .AsNoTracking()
+                .Where(bookingEvent =>
+                    bookingEvent.EventId == eventEntity.Id &&
+                    bookingEvent.EventValueSource ==
+                        EventValueSource.Unresolved &&
+                    bookingEvent.Booking.Payments.Any(payment =>
+                        payment.PaymentDate >= startDate &&
+                        payment.PaymentDate < endDateExclusive))
+                .Select(bookingEvent => bookingEvent.BookingId)
+                .ToListAsync(cancellationToken);
+
+            AllocationSummary allocationSummary = new(
+                IsComplete: unresolvedBookingIds.Count == 0,
+                UnresolvedBookingCount:
+                    unresolvedBookingIds.Distinct().Count(),
+                UnresolvedEventCount: unresolvedBookingIds.Count);
+
             return AppResponse<Result>.Ok(
                 new Result(
                     eventEntity.BookwhenEventId,
@@ -97,7 +121,8 @@ public sealed record ListAllPaymentsByEventQuery(
                     query.StartDate,
                     query.EndDate,
                     payments,
-                    payments.Sum(x => x.Value)));
+                    payments.Sum(x => x.Value),
+                    allocationSummary));
         }
     }
 }
