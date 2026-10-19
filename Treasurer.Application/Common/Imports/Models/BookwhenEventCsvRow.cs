@@ -2,7 +2,7 @@
 
 public sealed class BookwhenEventCsvRow
 {
-    public required string EntryId { get; init; }
+    public required string AttendanceId { get; init; }
     public required string EventId { get; init; }
     public required string EventTitle { get; init; }
     public string? EventCode { get; init; }
@@ -12,9 +12,14 @@ public sealed class BookwhenEventCsvRow
     public bool? Attended { get; init; }
     public required string BookingId { get; init; }
     public required string BookingReference { get; init; }
-    public decimal BookingPayment { get; init; }
+    public decimal? BookingPayment { get; init; }
     public required string TicketName { get; init; }
     public required string TicketType { get; init; }
+    public decimal? TicketFaceValue { get; init; }
+    public decimal? TicketDiscount { get; init; }
+    public decimal? TicketCurrentValue { get; init; }
+    public decimal? CurrentAttendanceValue { get; init; }
+    public int? TicketEventCount { get; init; }
     public string? BookerEmail { get; init; }
     public string? ContactName { get; init; }
     public string? AttendeeCustomerId { get; init; }

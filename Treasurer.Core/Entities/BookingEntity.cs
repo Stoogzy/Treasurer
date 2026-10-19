@@ -5,7 +5,8 @@ public class BookingEntity
     public Guid Id { get; set; } = Guid.NewGuid();
     public required string BookwhenBookingId { get; set; }
     public required string BookingReference { get; set; }
-    public required decimal BookingPayment {  get; set; }
+    public decimal? BookingPayment { get; set; }
+    public bool? IsGuardianBooking { get; set; }
     public required Guid BookerId { get; set; }
 
     public ICollection<BookingEventEntity> BookingEvents { get; set; } = [];

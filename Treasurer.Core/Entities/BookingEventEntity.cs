@@ -1,4 +1,6 @@
-﻿namespace Treasurer.Core.Entities;
+﻿using Treasurer.Core.Enums;
+
+namespace Treasurer.Core.Entities;
 
 public class BookingEventEntity
 {
@@ -10,6 +12,8 @@ public class BookingEventEntity
     public required string TicketName { get; set; }
     public required string TicketType { get; set; }
     public bool? Attended { get; set; }
+    public decimal? EventValue { get; set; }
+    public EventValueSource EventValueSource { get; set; }
 
     // Navigation Properties
     public BookingEntity Booking { get; set; } = null!;

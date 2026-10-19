@@ -7,9 +7,9 @@ internal sealed class BookwhenEventCsvRowValidator : AbstractValidator<BookwhenE
 {
     public BookwhenEventCsvRowValidator()
     {
-        RuleFor(x => x.EntryId)
+        RuleFor(x => x.AttendanceId)
             .NotEmpty()
-            .WithMessage("Entry ID is required.");
+            .WithMessage("Attendance ID is required.");
 
         RuleFor(x => x.EventId)
             .NotEmpty()
@@ -45,9 +45,5 @@ internal sealed class BookwhenEventCsvRowValidator : AbstractValidator<BookwhenE
             .WithMessage("Booker email is required.")
             .EmailAddress()
             .WithMessage("Booker email must be a valid email address.");
-
-        RuleFor(x => x.ContactName)
-            .NotEmpty()
-            .WithMessage("Contact name is required.");
     }
 }

@@ -5,7 +5,9 @@ using Treasurer.Core.Entities;
 
 namespace Treasurer.Application.Payments.ListMembershipPayments;
 
-public sealed record ListAllMembershipPaymentsQuery
+public sealed record ListAllMembershipPaymentsQuery(
+    DateOnly StartDate,
+    DateOnly EndDate)
 {
     private const string MembershipPaymentMethod = "Membership subscription";
 
@@ -16,24 +18,32 @@ public sealed record ListAllMembershipPaymentsQuery
         string PaidFor,
         decimal Value);
 
-    public sealed record Result(IReadOnlyList<PaymentItem> Payments, decimal TotalValue);
+    public sealed record Result(
+        DateOnly StartDate,
+        DateOnly EndDate,
+        IReadOnlyList<PaymentItem> Payments,
+        decimal TotalValue);
 
     public sealed class Handler(IApplicationDbContext dbContext) : IRequestHandler<ListAllMembershipPaymentsQuery, Result>
     {
-        public async Task<AppResponse<Result>> Handle(
-            ListAllMembershipPaymentsQuery query,
-            CancellationToken cancellationToken)
+        public async Task<AppResponse<Result>> Handle(ListAllMembershipPaymentsQuery query, CancellationToken cancellationToken)
         {
+            DateTime startDate = query.StartDate.ToDateTime(TimeOnly.MinValue);
+            DateTime endDateExclusive = query.EndDate
+                .AddDays(1)
+                .ToDateTime(TimeOnly.MinValue);
+
             List<PaymentEntity> payments = await dbContext.Payments
                 .AsNoTracking()
                 .Where(payment =>
                     payment.PaymentMethod ==
-                    MembershipPaymentMethod)
+                    MembershipPaymentMethod &&
+                    payment.PaymentDate >= startDate &&
+                    payment.PaymentDate < endDateExclusive)
                 .Include(payment => payment.Booking)
                     .ThenInclude(booking => booking!.BookingEvents)
                         .ThenInclude(bookingEvent =>
                             bookingEvent.Attendee)
-                .AsSplitQuery()
                 .OrderByDescending(payment => payment.PaymentDate)
                 .ToListAsync(cancellationToken);
 
@@ -67,7 +77,12 @@ public sealed record ListAllMembershipPaymentsQuery
                 })
                 .ToList();
 
-            return AppResponse<Result>.Ok(new Result(results, results.Sum(x => x.Value)));
+            return AppResponse<Result>.Ok(
+                new Result(
+                    query.StartDate,
+                    query.EndDate,
+                    results,
+                    results.Sum(x => x.Value)));
         }
     }
 }

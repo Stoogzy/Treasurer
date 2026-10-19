@@ -29,9 +29,12 @@ public sealed class EventsController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ListPaymentsByEvent(
         [FromRoute] string eventId,
+        [FromQuery] DateOnly startDate,
+        [FromQuery] DateOnly endDate,
         CancellationToken cancellationToken)
     {
-        ListAllPaymentsByEventQuery query = new(eventId);
+        ListAllPaymentsByEventQuery query =
+            new(eventId, startDate, endDate);
 
         AppResponse<ListAllPaymentsByEventQuery.Result> response = await listPaymentsHandler.Handle(query, cancellationToken);
 

@@ -8,8 +8,8 @@ internal sealed class BookwhenEventCsvMap
 {
     public BookwhenEventCsvMap()
     {
-        Map(x => x.EntryId)
-            .Name("EntryID");
+        Map(x => x.AttendanceId)
+            .Name("AttendanceID", "Attendance ID");
 
         Map(x => x.EventId)
             .Name("EventID");
@@ -78,6 +78,21 @@ internal sealed class BookwhenEventCsvMap
 
         Map(x => x.TicketType)
             .Name("Ticket type");
+
+        Map(x => x.TicketFaceValue)
+            .Name("Ticket face value");
+
+        Map(x => x.TicketDiscount)
+            .Name("Ticket discount");
+
+        Map(x => x.TicketCurrentValue)
+            .Name("Ticket current value");
+
+        Map(x => x.CurrentAttendanceValue)
+            .Name("Current attendance value");
+
+        Map(x => x.TicketEventCount)
+            .Name("Ticket event count");
 
         Map(x => x.BookerEmail)
             .Name("Booker email");

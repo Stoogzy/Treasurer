@@ -27,6 +27,12 @@ internal sealed class BookingEventEntityConfiguration : IEntityTypeConfiguration
             .HasMaxLength(200)
             .IsRequired();
 
+        builder.Property(x => x.EventValue)
+            .HasPrecision(18, 2);
+
+        builder.Property(x => x.EventValueSource)
+            .IsRequired();
+
         builder.HasIndex(x => x.BookingId);
 
         builder.HasIndex(x => x.EventId);

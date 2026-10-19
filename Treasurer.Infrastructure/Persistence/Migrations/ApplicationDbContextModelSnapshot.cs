@@ -79,7 +79,7 @@ namespace Treasurer.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("BookerId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("BookingPayment")
+                    b.Property<decimal?>("BookingPayment")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
@@ -92,6 +92,9 @@ namespace Treasurer.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool?>("IsGuardianBooking")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 
@@ -128,6 +131,13 @@ namespace Treasurer.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("EventId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("EventValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("EventValueSource")
+                        .HasColumnType("int");
 
                     b.Property<string>("TicketName")
                         .IsRequired()

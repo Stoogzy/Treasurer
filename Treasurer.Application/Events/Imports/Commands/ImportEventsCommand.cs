@@ -6,6 +6,7 @@ using Treasurer.Application.Common.Imports.Exceptions;
 using Treasurer.Application.Common.Imports.Models;
 using Treasurer.Application.Common.Interfaces;
 using Treasurer.Core.Entities;
+using Treasurer.Core.Enums;
 
 namespace Treasurer.Application.Events.Imports.Commands;
 
@@ -34,9 +35,15 @@ public sealed record ImportEventsCommand(
                         errors: errors);
                 }
 
+                Dictionary<string, IReadOnlyList<BookwhenEventCsvRow>> rowsByBooking =
+                    rows.GroupBy(row => row.BookingId)
+                        .ToDictionary(
+                            group => group.Key,
+                            group => (IReadOnlyList<BookwhenEventCsvRow>)group.ToList());
+
                 foreach (BookwhenEventCsvRow row in rows)
                 {
-                    await ImportRowAsync(row, cancellationToken);
+                    await ImportRowAsync(row, rowsByBooking[row.BookingId], cancellationToken);
                 }
 
                 await dbContext.SaveChangesAsync(cancellationToken);
@@ -88,13 +95,20 @@ public sealed record ImportEventsCommand(
                     .ToArray());
         }
 
-        private async Task ImportRowAsync(BookwhenEventCsvRow row, CancellationToken cancellationToken)
+        private async Task ImportRowAsync(
+            BookwhenEventCsvRow row,
+            IReadOnlyList<BookwhenEventCsvRow> bookingRows,
+            CancellationToken cancellationToken)
         {
             string bookerEmail = row.BookerEmail!.Trim();
-            string contactName = row.ContactName!.Trim();
             string bookingReference = row.BookingReference.Trim();
             string attendeeName = row.AttendeeCustomerName.Trim();
+            string? suppliedContactName = NormalizeOptionalValue(row.ContactName);
+            string contactName = suppliedContactName ?? attendeeName;
             string? attendeeCustomerId = NormalizeOptionalValue(row.AttendeeCustomerId);
+            decimal? bookingPayment = bookingRows
+                .Select(bookingRow => bookingRow.BookingPayment)
+                .FirstOrDefault(value => value.HasValue);
 
             BookerEntity? booker = dbContext.Bookers.Local
                 .SingleOrDefault(existing => existing.BookerEmail == bookerEmail)
@@ -112,12 +126,13 @@ public sealed record ImportEventsCommand(
 
                 dbContext.Bookers.Add(booker);
             }
-            else if (!string.Equals(
+            else if (suppliedContactName is not null &&
+                     !string.Equals(
                          booker.ContactName,
-                         contactName,
+                         suppliedContactName,
                          StringComparison.Ordinal))
             {
-                booker.ContactName = contactName;
+                booker.ContactName = suppliedContactName;
             }
 
             EventEntity? eventEntity = dbContext.Events.Local
@@ -196,7 +211,8 @@ public sealed record ImportEventsCommand(
                 {
                     BookwhenBookingId = row.BookingId.Trim(),
                     BookingReference = bookingReference,
-                    BookingPayment = row.BookingPayment,
+                    BookingPayment = bookingPayment,
+                    IsGuardianBooking = DetermineGuardianBooking(bookingRows),
                     BookerId = booker.Id,
                     Booker = booker
                 };
@@ -207,22 +223,27 @@ public sealed record ImportEventsCommand(
             {
                 booking.BookwhenBookingId = row.BookingId.Trim();
                 booking.BookingReference = bookingReference;
-                booking.BookingPayment = row.BookingPayment;
+                booking.BookingPayment = bookingPayment;
+                booking.IsGuardianBooking = DetermineGuardianBooking(bookingRows);
                 booking.BookerId = booker.Id;
                 booking.Booker = booker;
             }
 
+            (decimal? eventValue, EventValueSource eventValueSource) = DetermineEventValue(row, bookingRows);
+
             BookingEventEntity? bookingEvent = dbContext.BookingEvents.Local
-                .SingleOrDefault(existing => existing.BookwhenEntryId == row.EntryId)
+                .SingleOrDefault(existing =>
+                    existing.BookwhenEntryId == row.AttendanceId)
                 ?? await dbContext.BookingEvents.SingleOrDefaultAsync(
-                    existing => existing.BookwhenEntryId == row.EntryId,
+                    existing =>
+                        existing.BookwhenEntryId == row.AttendanceId,
                     cancellationToken);
 
             if (bookingEvent is null)
             {
                 bookingEvent = new BookingEventEntity
                 {
-                    BookwhenEntryId = row.EntryId.Trim(),
+                    BookwhenEntryId = row.AttendanceId.Trim(),
                     BookingId = booking.Id,
                     Booking = booking,
                     EventId = eventEntity.Id,
@@ -231,7 +252,9 @@ public sealed record ImportEventsCommand(
                     Attendee = attendee,
                     TicketName = row.TicketName.Trim(),
                     TicketType = row.TicketType.Trim(),
-                    Attended = row.Attended
+                    Attended = row.Attended,
+                    EventValue = eventValue,
+                    EventValueSource = eventValueSource
                 };
 
                 dbContext.BookingEvents.Add(bookingEvent);
@@ -247,6 +270,13 @@ public sealed record ImportEventsCommand(
                 bookingEvent.TicketName = row.TicketName.Trim();
                 bookingEvent.TicketType = row.TicketType.Trim();
                 bookingEvent.Attended = row.Attended;
+
+                if (eventValueSource != EventValueSource.Unresolved ||
+                    bookingEvent.EventValueSource != EventValueSource.Manual)
+                {
+                    bookingEvent.EventValue = eventValue;
+                    bookingEvent.EventValueSource = eventValueSource;
+                }
             }
 
             List<PaymentEntity> unmatchedPayments = await dbContext.Payments
@@ -265,6 +295,58 @@ public sealed record ImportEventsCommand(
         private static string? NormalizeOptionalValue(string? value)
         {
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+
+        private static bool? DetermineGuardianBooking(IReadOnlyList<BookwhenEventCsvRow> bookingRows)
+        {
+            bool hasMissingContactName = false;
+
+            foreach (BookwhenEventCsvRow row in bookingRows)
+            {
+                string? contactName = NormalizeOptionalValue(row.ContactName);
+
+                if (contactName is null)
+                {
+                    hasMissingContactName = true;
+                    continue;
+                }
+
+                if (!string.Equals(
+                        contactName,
+                        row.AttendeeCustomerName.Trim(),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return hasMissingContactName ? null : false;
+        }
+
+        private static (decimal? Value, EventValueSource Source) DetermineEventValue(BookwhenEventCsvRow row, IReadOnlyList<BookwhenEventCsvRow> bookingRows)
+        {
+            if (row.CurrentAttendanceValue.HasValue)
+            {
+                return (
+                    row.CurrentAttendanceValue.Value,
+                    EventValueSource.BookwhenAttendanceValue);
+            }
+
+            int distinctEventCount = bookingRows
+                .Select(bookingRow => bookingRow.EventId)
+                .Distinct(StringComparer.Ordinal)
+                .Count();
+
+            if (bookingRows.Count == 1 &&
+                distinctEventCount == 1 &&
+                row.BookingPayment.HasValue)
+            {
+                return (
+                    row.BookingPayment.Value,
+                    EventValueSource.SingleEventBookingPayment);
+            }
+
+            return (null, EventValueSource.Unresolved);
         }
     }
 }
