@@ -1,5 +1,5 @@
 ﻿using CsvHelper.Configuration;
-using Treasurer.Application.Imports.Models;
+using Treasurer.Application.Common.Imports.Models;
 
 namespace Treasurer.Infrastructure.Imports.Csv;
 

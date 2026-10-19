@@ -2,9 +2,9 @@
 using CsvHelper.Configuration;
 using System.Globalization;
 using System.Text;
+using Treasurer.Application.Common.Imports.Exceptions;
+using Treasurer.Application.Common.Imports.Models;
 using Treasurer.Application.Common.Interfaces;
-using Treasurer.Application.Imports.Exceptions;
-using Treasurer.Application.Imports.Models;
 
 namespace Treasurer.Infrastructure.Imports.Csv;
 

@@ -1,7 +1,7 @@
 ﻿using FluentValidation;
-using Treasurer.Application.Imports.Models;
+using Treasurer.Application.Common.Imports.Models;
 
-namespace Treasurer.Application.Imports.Validators;
+namespace Treasurer.Application.Common.Imports.Validators;
 
 internal sealed class BookwhenPaymentCsvRowValidator : AbstractValidator<BookwhenPaymentCsvRow>
 {

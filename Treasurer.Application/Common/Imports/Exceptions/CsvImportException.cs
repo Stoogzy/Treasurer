@@ -1,4 +1,4 @@
-﻿namespace Treasurer.Application.Imports.Exceptions;
+﻿namespace Treasurer.Application.Common.Imports.Exceptions;
 
 public sealed class CsvImportException : Exception
 {

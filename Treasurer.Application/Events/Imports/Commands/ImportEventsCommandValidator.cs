@@ -1,10 +1,10 @@
 ﻿using FluentValidation;
 
-namespace Treasurer.Application.Payments.Commands;
+namespace Treasurer.Application.Events.Imports.Commands;
 
-internal sealed class ImportPaymentsCommandValidator : AbstractValidator<ImportPaymentsCommand>
+internal sealed class ImportEventsCommandValidator : AbstractValidator<ImportEventsCommand>
 {
-    public ImportPaymentsCommandValidator()
+    public ImportEventsCommandValidator()
     {
         RuleFor(x => x.CsvStream)
             .Cascade(CascadeMode.Stop)

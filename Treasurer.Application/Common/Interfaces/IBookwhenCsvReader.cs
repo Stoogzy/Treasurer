@@ -1,4 +1,4 @@
-﻿using Treasurer.Application.Imports.Models;
+﻿using Treasurer.Application.Common.Imports.Models;
 
 namespace Treasurer.Application.Common.Interfaces;
 

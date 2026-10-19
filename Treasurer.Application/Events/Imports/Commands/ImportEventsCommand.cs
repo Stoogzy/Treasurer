@@ -2,12 +2,12 @@
 using FluentValidation.Results;
 using Microsoft.EntityFrameworkCore;
 using Treasurer.Application.Common.AppRequests;
+using Treasurer.Application.Common.Imports.Exceptions;
+using Treasurer.Application.Common.Imports.Models;
 using Treasurer.Application.Common.Interfaces;
-using Treasurer.Application.Imports.Exceptions;
-using Treasurer.Application.Imports.Models;
 using Treasurer.Core.Entities;
 
-namespace Treasurer.Application.Events.Commands;
+namespace Treasurer.Application.Events.Imports.Commands;
 
 public sealed record ImportEventsCommand(
     Stream CsvStream,

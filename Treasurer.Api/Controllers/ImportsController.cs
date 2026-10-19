@@ -2,8 +2,8 @@
 using Treasurer.Api.Contracts.Requests;
 using Treasurer.Api.Extensions;
 using Treasurer.Application.Common.AppRequests;
-using Treasurer.Application.Events.Commands;
-using Treasurer.Application.Payments.Commands;
+using Treasurer.Application.Events.Imports.Commands;
+using Treasurer.Application.Payments.Import.Commands;
 
 namespace Treasurer.Api.Controllers;
 

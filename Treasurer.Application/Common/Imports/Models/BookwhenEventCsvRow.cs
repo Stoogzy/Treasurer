@@ -1,4 +1,4 @@
-﻿namespace Treasurer.Application.Imports.Models;
+﻿namespace Treasurer.Application.Common.Imports.Models;
 
 public sealed class BookwhenEventCsvRow
 {
