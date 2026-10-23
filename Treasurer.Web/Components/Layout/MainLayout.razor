@@ -1,0 +1,47 @@
+﻿@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <aside class="sidebar">
+        <a class="brand" href="/">
+            <span class="brand-mark">T</span>
+            <span>
+                <strong>Treasurer</strong>
+                <small>Club finance</small>
+            </span>
+        </a>
+
+        <nav class="main-nav" aria-label="Main navigation">
+            <NavLink href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
+            <NavLink href="/imports">Import CSV files</NavLink>
+            <NavLink href="/events">All events</NavLink>
+            <NavLink href="/events-by-name">Events by name</NavLink>
+            <NavLink href="/memberships">Memberships</NavLink>
+            <NavLink href="/unresolved">Unresolved bookings</NavLink>
+        </nav>
+
+        <div class="sidebar-note">
+            <strong>Local application</strong>
+            <span>Data stays in SQL Server LocalDB on this computer.</span>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <div>
+                <span class="eyebrow">Bookwhen reporting</span>
+                <span class="topbar-title">Treasury workspace</span>
+            </div>
+            <a class="button button-secondary" href="/imports">Import data</a>
+        </header>
+
+        <div class="page-container">
+            @Body
+        </div>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>

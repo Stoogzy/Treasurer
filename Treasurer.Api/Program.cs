@@ -5,13 +5,13 @@ using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddServiceDefaults();
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
-
-builder.Services.AddHealthChecks();
 
 builder.Services.AddProblemDetails();
 
@@ -25,7 +25,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
-app.MapHealthChecks("/health");
+app.MapDefaultEndpoints();
 
 if (app.Environment.IsDevelopment())
 {

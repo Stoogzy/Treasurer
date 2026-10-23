@@ -1,0 +1,214 @@
+@page "/unresolved"
+@inject TreasurerApiClient ApiClient
+
+<PageTitle>Unresolved bookings | Treasurer</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">Data quality</span>
+        <h1>Unallocated payments</h1>
+        <p>Review payments that are not fully represented by the imported event and membership data.</p>
+    </div>
+</div>
+
+<section class="panel filter-panel">
+    <label>
+        <span>Start date</span>
+        <input type="date" @bind="StartDate" />
+    </label>
+    <label>
+        <span>End date</span>
+        <input type="date" @bind="EndDate" />
+    </label>
+    <button class="button button-primary" @onclick="LoadAsync">
+        Apply dates
+    </button>
+</section>
+
+@if (IsLoading)
+{
+    <div class="loading-panel">Loading unresolved bookings...</div>
+}
+else if (ErrorMessage is not null)
+{
+    <div class="alert alert-error">@ErrorMessage</div>
+}
+else if (Result is not null)
+{
+    <section class="stat-grid stat-grid-compact">
+        <article class="stat-card @(Result.UnresolvedEventCount > 0 ? "stat-card-warning" : "")">
+            <span>Unresolved event values</span>
+            <strong>@Result.UnresolvedEventCount</strong>
+            <small>Across @Result.Bookings.Count bookings</small>
+        </article>
+        <article class="stat-card @(Result.UnallocatedPayments.Count > 0 ? "stat-card-warning" : "")">
+            <span>Remaining unallocated</span>
+            <strong>@Result.TotalRemainingUnallocatedValue.ToString("C")</strong>
+            <small>Across @Result.UnallocatedPayments.Count payments</small>
+        </article>
+    </section>
+
+    @if (Result.UnallocatedPayments.Count == 0 &&
+         Result.Bookings.Count == 0)
+    {
+        <div class="panel empty-state">
+            All payments in this date range are fully allocated.
+        </div>
+    }
+    else
+    {
+        @if (Result.UnallocatedPayments.Count > 0)
+        {
+            <section class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <span class="eyebrow">Payment gaps</span>
+                        <h2>@Result.UnallocatedPayments.Count payments</h2>
+                    </div>
+                </div>
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Payment date</th>
+                                <th>Paid by</th>
+                                <th>Reference</th>
+                                <th>Reason</th>
+                                <th class="number">Received</th>
+                                <th class="number">Allocated</th>
+                                <th class="number">Unallocated</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (UnallocatedPaymentItem payment in
+                                Result.UnallocatedPayments)
+                            {
+                                <tr>
+                                    <td>@payment.PaymentDate.ToString("d MMM yyyy")</td>
+                                    <td>@payment.PaidBy</td>
+                                    <td><span class="code">@payment.BookingReference</span></td>
+                                    <td>@payment.Reason</td>
+                                    <td class="number">@payment.PaymentValue.ToString("C")</td>
+                                    <td class="number">@payment.AllocatedValue.ToString("C")</td>
+                                    <td class="number strong">@payment.RemainingUnallocatedValue.ToString("C")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+
+        @if (Result.Bookings.Count > 0)
+        {
+        <div class="booking-list">
+            @foreach (UnresolvedBookingItem booking in Result.Bookings)
+            {
+                <article class="panel booking-card">
+                    <div class="booking-heading">
+                        <div>
+                            <span class="eyebrow">Booking @booking.BookingReference</span>
+                            <h2>@booking.BookerName</h2>
+                            <span>@booking.BookerEmail</span>
+                        </div>
+                        <div class="booking-value">
+                            <span>Remaining unallocated</span>
+                            <strong>@(booking.RemainingUnallocatedValue?.ToString("C") ?? "Unavailable")</strong>
+                            <small>
+                                @booking.AllocatedValue.ToString("C") allocated
+                                of @(booking.BookingPayment?.ToString("C") ?? "unknown") payment
+                            </small>
+                            <small>Guardian: @GuardianLabel(booking.IsGuardianBooking)</small>
+                        </div>
+                    </div>
+
+                    <div class="unresolved-events">
+                        @foreach (UnresolvedEventItem eventItem in booking.Events)
+                        {
+                            <div class="unresolved-row">
+                                <div>
+                                    <strong>@eventItem.EventName</strong>
+                                    <span>
+                                        @(eventItem.StartsAt?.ToString("d MMM yyyy, HH:mm") ?? "Date unavailable")
+                                    </span>
+                                </div>
+                                <div>
+                                    <strong>@eventItem.AttendeeName</strong>
+                                    <span>@eventItem.TicketName / @eventItem.TicketType</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+        }
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "startDate")]
+    public DateOnly? StartDateQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "endDate")]
+    public DateOnly? EndDateQuery { get; set; }
+
+    private UnresolvedBookingsResult? Result { get; set; }
+    private bool IsLoading { get; set; } = true;
+    private string? ErrorMessage { get; set; }
+    private DateOnly StartDate { get; set; } =
+        PreviousMonthStart;
+    private DateOnly EndDate { get; set; } =
+        PreviousMonthStart.AddMonths(1).AddDays(-1);
+
+    private static DateOnly PreviousMonthStart =>
+        new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1)
+            .AddMonths(-1);
+
+    protected override Task OnInitializedAsync()
+    {
+        StartDate = StartDateQuery ?? StartDate;
+        EndDate = EndDateQuery ?? EndDate;
+
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (EndDate < StartDate)
+        {
+            ErrorMessage =
+                "The end date must be on or after the start date.";
+            return;
+        }
+
+        IsLoading = true;
+        ErrorMessage = null;
+
+        try
+        {
+            Result = await ApiClient.GetUnresolvedBookingsAsync(
+                StartDate,
+                EndDate);
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage =
+                $"Unresolved bookings could not be loaded. {exception.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private static string GuardianLabel(bool? isGuardian)
+    {
+        return isGuardian switch
+        {
+            true => "Yes",
+            false => "No",
+            null => "Unknown"
+        };
+    }
+}

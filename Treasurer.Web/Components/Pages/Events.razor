@@ -1,0 +1,140 @@
+@page "/events"
+@inject TreasurerApiClient ApiClient
+
+<PageTitle>All events | Treasurer</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">Reports</span>
+        <h1>All events</h1>
+        <p>Review every imported event occurrence in chronological order.</p>
+    </div>
+</div>
+
+@if (IsLoading)
+{
+    <div class="loading-panel">Loading events...</div>
+}
+else if (ErrorMessage is not null)
+{
+    <div class="alert alert-error">@ErrorMessage</div>
+}
+else
+{
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <span class="eyebrow">Imported events</span>
+                <h2>@FilteredEvents.Count event records</h2>
+            </div>
+            <input class="search-input"
+                   type="search"
+                   placeholder="Search events"
+                   @bind="SearchText"
+                   @bind:event="oninput" />
+        </div>
+
+        <div class="event-list">
+            @foreach (EventItem eventItem in FilteredEvents)
+            {
+                <a class="event-row"
+                   href="@GetEventUrl(eventItem.EventId)">
+                    <div>
+                        <strong>@eventItem.EventName</strong>
+                        <span class="event-schedule">
+                            @FormatSchedule(eventItem)
+                        </span>
+                        <span class="event-metadata">
+                            @FormatMetadata(eventItem)
+                        </span>
+                    </div>
+                    <span class="row-action">View payments</span>
+                </a>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    private IReadOnlyList<EventItem> EventItems { get; set; } = [];
+    private bool IsLoading { get; set; } = true;
+    private string? ErrorMessage { get; set; }
+    private string SearchText { get; set; } = string.Empty;
+
+    private IReadOnlyList<EventItem> FilteredEvents =>
+        EventItems
+            .Where(eventItem =>
+                string.IsNullOrWhiteSpace(SearchText) ||
+                eventItem.EventName.Contains(
+                    SearchText,
+                    StringComparison.OrdinalIgnoreCase) ||
+                eventItem.EventId.Contains(
+                    SearchText,
+                    StringComparison.OrdinalIgnoreCase) ||
+                (eventItem.EventCode?.Contains(
+                    SearchText,
+                    StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (eventItem.Location?.Contains(
+                    SearchText,
+                    StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            EventItems = (await ApiClient.GetEventsAsync()).Events;
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage =
+                $"Events could not be loaded. {exception.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private string GetEventUrl(string eventId)
+    {
+        return $"/events/{Uri.EscapeDataString(eventId)}";
+    }
+
+    private static string FormatSchedule(EventItem eventItem)
+    {
+        if (!eventItem.StartsAt.HasValue)
+        {
+            return "Date and time unavailable";
+        }
+
+        string start = eventItem.StartsAt.Value
+            .ToString("ddd d MMM yyyy, HH:mm");
+
+        if (!eventItem.EndsAt.HasValue)
+        {
+            return start;
+        }
+
+        return $"{start}-{eventItem.EndsAt.Value:HH:mm}";
+    }
+
+    private static string FormatMetadata(EventItem eventItem)
+    {
+        List<string> details = [];
+
+        if (!string.IsNullOrWhiteSpace(eventItem.Location))
+        {
+            details.Add(eventItem.Location);
+        }
+
+        if (!string.IsNullOrWhiteSpace(eventItem.EventCode))
+        {
+            details.Add($"Code {eventItem.EventCode}");
+        }
+
+        details.Add($"Bookwhen {eventItem.EventId}");
+
+        return string.Join(" / ", details);
+    }
+}

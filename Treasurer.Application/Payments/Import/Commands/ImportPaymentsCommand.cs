@@ -5,7 +5,9 @@ using Treasurer.Application.Common.AppRequests;
 using Treasurer.Application.Common.Imports.Exceptions;
 using Treasurer.Application.Common.Imports.Models;
 using Treasurer.Application.Common.Interfaces;
+using Treasurer.Application.Common.Payments;
 using Treasurer.Core.Entities;
+using Treasurer.Core.Enums;
 
 namespace Treasurer.Application.Payments.Import.Commands;
 
@@ -103,7 +105,8 @@ public sealed record ImportPaymentsCommand(
             string? customerName = NormalizeOptionalValue(row.CustomerName);
             string? payerEmail = NormalizeOptionalValue(row.PayerEmail);
 
-            bool alreadyTracked = dbContext.Payments.Local.Any(
+            PaymentEntity? existingPayment =
+                dbContext.Payments.Local.SingleOrDefault(
                 payment =>
                     payment.PaymentDate == row.PaymentDate &&
                     payment.BookingReference == bookingReference &&
@@ -112,31 +115,60 @@ public sealed record ImportPaymentsCommand(
                     payment.PaymentValue == row.PaymentValue &&
                     payment.PayerEmail == payerEmail);
 
-            if (alreadyTracked)
-            {
-                return false;
-            }
-
-            bool alreadyPersisted = await dbContext.Payments.AnyAsync(
-                payment =>
+            existingPayment ??=
+                await dbContext.Payments.SingleOrDefaultAsync(
+                    payment =>
                     payment.PaymentDate == row.PaymentDate &&
                     payment.BookingReference == bookingReference &&
                     payment.PaymentStatus == paymentStatus &&
                     payment.PaymentMethod == paymentMethod &&
                     payment.PaymentValue == row.PaymentValue &&
                     payment.PayerEmail == payerEmail,
-                cancellationToken);
-
-            if (alreadyPersisted)
-            {
-                return false;
-            }
+                    cancellationToken);
 
             BookingEntity? booking =
-                await dbContext.Bookings.SingleOrDefaultAsync(
+                dbContext.Bookings.Local.SingleOrDefault(
                     existing =>
-                        existing.BookingReference == bookingReference,
-                    cancellationToken);
+                        existing.BookingReference == bookingReference)
+                ?? await dbContext.Bookings
+                    .Include(existing => existing.BookingEvents)
+                    .SingleOrDefaultAsync(
+                        existing =>
+                            existing.BookingReference == bookingReference,
+                        cancellationToken);
+
+            bool hasInitialMembershipEvent =
+                booking?.BookingEvents.Any(bookingEvent =>
+                    bookingEvent.EventValueSource ==
+                    EventValueSource.InitialMembershipPayment)
+                ?? false;
+            bool hasMixedMembershipValue =
+                booking?.BookingEvents.Any(bookingEvent =>
+                    bookingEvent.EventValueSource ==
+                        EventValueSource.InitialMembershipPayment &&
+                    bookingEvent.EventValue is > 0m)
+                ?? false;
+
+            PaymentCategory paymentCategory =
+                PaymentClassification.DetermineCategory(
+                    paymentMethod,
+                    hasLinkedBooking: booking is not null,
+                    isEntirePaymentMembership:
+                        hasInitialMembershipEvent &&
+                        !hasMixedMembershipValue,
+                    hasMembershipComponent:
+                        hasMixedMembershipValue);
+
+            if (existingPayment is not null)
+            {
+                existingPayment.CustomerName = customerName;
+                existingPayment.PayerEmail = payerEmail;
+                existingPayment.BookingId = booking?.Id;
+                existingPayment.Booking = booking;
+                existingPayment.PaymentCategory = paymentCategory;
+
+                return false;
+            }
 
             PaymentEntity payment = new()
             {
@@ -145,6 +177,7 @@ public sealed record ImportPaymentsCommand(
                 PaymentStatus = paymentStatus,
                 PaymentMethod = paymentMethod,
                 PaymentValue = row.PaymentValue,
+                PaymentCategory = paymentCategory,
                 CustomerName = customerName,
                 PayerEmail = payerEmail,
                 BookingId = booking?.Id,

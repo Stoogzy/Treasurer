@@ -8,7 +8,11 @@ public sealed record ListAllEventsQuery
 {
     public sealed record EventItem(
         string EventId,
-        string EventName);
+        string EventName,
+        string? EventCode,
+        string? Location,
+        DateTime? StartsAt,
+        DateTime? EndsAt);
 
     public sealed record Result(IReadOnlyList<EventItem> Events);
 
@@ -18,11 +22,16 @@ public sealed record ListAllEventsQuery
         {
             List<EventItem> events = await dbContext.Events
                 .AsNoTracking()
-                .OrderBy(x => x.EventName)
+                .OrderBy(x => x.StartsAt == null)
                 .ThenBy(x => x.StartsAt)
+                .ThenBy(x => x.EventName)
                 .Select(x => new EventItem(
                     x.BookwhenEventId,
-                    x.EventName))
+                    x.EventName,
+                    x.EventCode,
+                    x.Location,
+                    x.StartsAt,
+                    x.EndsAt))
                 .ToListAsync(cancellationToken);
 
             return AppResponse<Result>.Ok(new Result(events));

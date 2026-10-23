@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Treasurer.Application\Treasurer.Application.csproj" />
     <ProjectReference Include="..\Treasurer.Infrastructure\Treasurer.Infrastructure.csproj" />
+    <ProjectReference Include="..\Treasurer.ServiceDefaults\Treasurer.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

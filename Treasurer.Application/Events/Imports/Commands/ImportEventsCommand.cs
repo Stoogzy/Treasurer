@@ -5,6 +5,7 @@ using Treasurer.Application.Common.AppRequests;
 using Treasurer.Application.Common.Imports.Exceptions;
 using Treasurer.Application.Common.Imports.Models;
 using Treasurer.Application.Common.Interfaces;
+using Treasurer.Application.Common.Payments;
 using Treasurer.Core.Entities;
 using Treasurer.Core.Enums;
 
@@ -279,16 +280,30 @@ public sealed record ImportEventsCommand(
                 }
             }
 
-            List<PaymentEntity> unmatchedPayments = await dbContext.Payments
+            bool isEntirePaymentMembership =
+                IsInitialMembershipBooking(bookingRows);
+            bool hasMembershipComponent =
+                TryGetMixedMembershipValue(
+                    bookingRows,
+                    out _);
+
+            List<PaymentEntity> relatedPayments = await dbContext.Payments
                 .Where(payment =>
-                    payment.BookingId == null &&
                     payment.BookingReference == bookingReference)
                 .ToListAsync(cancellationToken);
 
-            foreach (PaymentEntity payment in unmatchedPayments)
+            foreach (PaymentEntity payment in relatedPayments)
             {
                 payment.BookingId = booking.Id;
                 payment.Booking = booking;
+                payment.PaymentCategory =
+                    PaymentClassification.DetermineCategory(
+                        payment.PaymentMethod,
+                        hasLinkedBooking: true,
+                        isEntirePaymentMembership:
+                            isEntirePaymentMembership,
+                        hasMembershipComponent:
+                            hasMembershipComponent);
             }
         }
 
@@ -332,6 +347,30 @@ public sealed record ImportEventsCommand(
                     EventValueSource.BookwhenAttendanceValue);
             }
 
+            if (IsInitialMembershipBooking(bookingRows))
+            {
+                return (
+                    0m,
+                    EventValueSource.InitialMembershipPayment);
+            }
+
+            if (TryGetMixedMembershipValue(
+                    bookingRows,
+                    out decimal mixedMembershipValue) &&
+                IsMixedMembershipRow(row))
+            {
+                return (
+                    mixedMembershipValue,
+                    EventValueSource.InitialMembershipPayment);
+            }
+
+            if (IsMembershipIncludedRecreationalSession(
+                    row,
+                    bookingRows))
+            {
+                return (0m, EventValueSource.MembershipIncluded);
+            }
+
             int distinctEventCount = bookingRows
                 .Select(bookingRow => bookingRow.EventId)
                 .Distinct(StringComparer.Ordinal)
@@ -347,6 +386,88 @@ public sealed record ImportEventsCommand(
             }
 
             return (null, EventValueSource.Unresolved);
+        }
+
+        private static bool IsInitialMembershipBooking(
+            IReadOnlyList<BookwhenEventCsvRow> bookingRows)
+        {
+            bool hasPositiveBookingPayment = bookingRows.Any(
+                row => row.BookingPayment is > 0m);
+
+            bool hasNoTicketOrAttendanceValues = bookingRows.All(
+                row =>
+                    !row.TicketFaceValue.HasValue &&
+                    !row.TicketCurrentValue.HasValue &&
+                    !row.CurrentAttendanceValue.HasValue);
+
+            return hasPositiveBookingPayment &&
+                   hasNoTicketOrAttendanceValues;
+        }
+
+        private static bool TryGetMixedMembershipValue(
+            IReadOnlyList<BookwhenEventCsvRow> bookingRows,
+            out decimal membershipValue)
+        {
+            membershipValue = 0m;
+
+            List<BookwhenEventCsvRow> membershipRows = bookingRows
+                .Where(IsMixedMembershipRow)
+                .ToList();
+
+            if (membershipRows.Count != 1 ||
+                !bookingRows.Any(row =>
+                    row.CurrentAttendanceValue.HasValue))
+            {
+                return false;
+            }
+
+            decimal? bookingPayment = bookingRows
+                .Select(row => row.BookingPayment)
+                .FirstOrDefault(value => value.HasValue);
+
+            if (!bookingPayment.HasValue)
+            {
+                return false;
+            }
+
+            decimal knownValue = bookingRows
+                .Where(row =>
+                    row.CurrentAttendanceValue.HasValue)
+                .Sum(row =>
+                    row.CurrentAttendanceValue!.Value);
+
+            membershipValue = bookingPayment.Value - knownValue;
+
+            return membershipValue > 0m;
+        }
+
+        private static bool IsMixedMembershipRow(
+            BookwhenEventCsvRow row)
+        {
+            return !row.TicketFaceValue.HasValue &&
+                   !row.TicketCurrentValue.HasValue &&
+                   !row.CurrentAttendanceValue.HasValue &&
+                   row.TicketName.Contains(
+                       "League player",
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsMembershipIncludedRecreationalSession(
+            BookwhenEventCsvRow row,
+            IReadOnlyList<BookwhenEventCsvRow> bookingRows)
+        {
+            bool hasNoBookingPayment = bookingRows.All(
+                bookingRow =>
+                    !bookingRow.BookingPayment.HasValue ||
+                    bookingRow.BookingPayment.Value == 0m);
+
+            return hasNoBookingPayment &&
+                   row.EventTitle.Contains(
+                       "Recreational",
+                       StringComparison.OrdinalIgnoreCase) &&
+                   row.TicketName.Contains(
+                       "League Player",
+                       StringComparison.OrdinalIgnoreCase);
         }
     }
 }

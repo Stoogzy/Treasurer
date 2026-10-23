@@ -1,0 +1,156 @@
+@page "/imports"
+@inject TreasurerApiClient ApiClient
+
+<PageTitle>Import data | Treasurer</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">Monthly data</span>
+        <h1>Import Bookwhen CSV files</h1>
+        <p>Import the events export first so payment references can be matched to bookings.</p>
+    </div>
+</div>
+
+<div class="import-grid">
+    <section class="panel import-card">
+        <div class="step-number">1</div>
+        <span class="eyebrow">Bookwhen events</span>
+        <h2>Events and attendance</h2>
+        <p>Creates events, bookings, attendees, and per-event payment allocations.</p>
+
+        <label class="file-picker">
+            <span>@(EventsFile?.Name ?? "Choose events CSV")</span>
+            <InputFile OnChange="SelectEventsFile" accept=".csv,text/csv" />
+        </label>
+
+        <button class="button button-primary"
+                disabled="@(EventsFile is null || IsImportingEvents)"
+                @onclick="ImportEventsAsync">
+            @(IsImportingEvents ? "Importing..." : "Import events")
+        </button>
+
+        @if (EventsMessage is not null)
+        {
+            <div class="alert @(EventsSucceeded ? "alert-success" : "alert-error")">
+                @EventsMessage
+            </div>
+        }
+    </section>
+
+    <section class="panel import-card">
+        <div class="step-number">2</div>
+        <span class="eyebrow">Bookwhen payments</span>
+        <h2>Received payments</h2>
+        <p>Imports the payment ledger and links matching references to bookings.</p>
+
+        <label class="file-picker">
+            <span>@(PaymentsFile?.Name ?? "Choose payments CSV")</span>
+            <InputFile OnChange="SelectPaymentsFile" accept=".csv,text/csv" />
+        </label>
+
+        <button class="button button-primary"
+                disabled="@(PaymentsFile is null || IsImportingPayments)"
+                @onclick="ImportPaymentsAsync">
+            @(IsImportingPayments ? "Importing..." : "Import payments")
+        </button>
+
+        @if (PaymentsMessage is not null)
+        {
+            <div class="alert @(PaymentsSucceeded ? "alert-success" : "alert-error")">
+                @PaymentsMessage
+            </div>
+        }
+    </section>
+</div>
+
+<section class="panel guidance-panel">
+    <div>
+        <span class="eyebrow">Import guidance</span>
+        <h2>Safe to run more than once</h2>
+    </div>
+    <p>
+        Imports update existing Bookwhen records instead of duplicating them.
+        Unclear multi-event values are left unresolved rather than being guessed.
+    </p>
+</section>
+
+@code {
+    private IBrowserFile? EventsFile { get; set; }
+    private IBrowserFile? PaymentsFile { get; set; }
+    private bool IsImportingEvents { get; set; }
+    private bool IsImportingPayments { get; set; }
+    private bool EventsSucceeded { get; set; }
+    private bool PaymentsSucceeded { get; set; }
+    private string? EventsMessage { get; set; }
+    private string? PaymentsMessage { get; set; }
+
+    private void SelectEventsFile(InputFileChangeEventArgs args)
+    {
+        EventsFile = args.File;
+        EventsMessage = null;
+    }
+
+    private void SelectPaymentsFile(InputFileChangeEventArgs args)
+    {
+        PaymentsFile = args.File;
+        PaymentsMessage = null;
+    }
+
+    private async Task ImportEventsAsync()
+    {
+        if (EventsFile is null)
+        {
+            return;
+        }
+
+        IsImportingEvents = true;
+        EventsMessage = null;
+
+        try
+        {
+            ImportResult result =
+                await ApiClient.ImportEventsAsync(EventsFile);
+            EventsSucceeded = true;
+            EventsMessage =
+                $"Processed {result.ImportedRowCount} event rows successfully.";
+        }
+        catch (Exception exception)
+        {
+            EventsSucceeded = false;
+            EventsMessage = $"Import failed. {exception.Message}";
+        }
+        finally
+        {
+            IsImportingEvents = false;
+        }
+    }
+
+    private async Task ImportPaymentsAsync()
+    {
+        if (PaymentsFile is null)
+        {
+            return;
+        }
+
+        IsImportingPayments = true;
+        PaymentsMessage = null;
+
+        try
+        {
+            ImportResult result =
+                await ApiClient.ImportPaymentsAsync(PaymentsFile);
+            PaymentsSucceeded = true;
+            PaymentsMessage =
+                $"Imported {result.ImportedRowCount} new payment rows.";
+        }
+        catch (Exception exception)
+        {
+            PaymentsSucceeded = false;
+            PaymentsMessage = $"Import failed. {exception.Message}";
+        }
+        finally
+        {
+            IsImportingPayments = false;
+        }
+    }
+}

@@ -1,0 +1,191 @@
+@page "/"
+@inject TreasurerApiClient ApiClient
+
+<PageTitle>Dashboard | Treasurer</PageTitle>
+
+<div class="page-heading dashboard-heading">
+    <div>
+        <span class="eyebrow">Overview</span>
+        <h1>@MonthLabel</h1>
+        <p>Monitor received money and event allocations for the selected month.</p>
+    </div>
+
+    <label class="month-selector">
+        <span>Reporting month</span>
+        <input type="month"
+               value="@SelectedMonthValue"
+               @onchange="ChangeMonthAsync" />
+    </label>
+</div>
+
+@if (IsLoading)
+{
+    <div class="loading-panel">Loading dashboard...</div>
+}
+else if (ErrorMessage is not null)
+{
+    <div class="alert alert-error">@ErrorMessage</div>
+}
+else if (Overview is not null)
+{
+    <section class="stat-grid dashboard-stat-grid">
+        <article class="stat-card stat-card-accent">
+            <span>Total payments received</span>
+            <strong>@Overview.TotalPaymentsReceived.ToString("C")</strong>
+            <small>@Overview.PaymentCount payments</small>
+        </article>
+        <article class="stat-card">
+            <span>Allocated event income</span>
+            <strong>@Overview.AllocatedEventIncome.ToString("C")</strong>
+            <small>Across @Overview.EventsWithPayments events</small>
+        </article>
+        <article class="stat-card">
+            <span>Membership income</span>
+            <strong>@Overview.MembershipIncome.ToString("C")</strong>
+            <small>@Overview.MembershipPaymentCount payments</small>
+        </article>
+        <article class="stat-card @(Overview.AllocationSummary.IsComplete ? "" : "stat-card-warning")">
+            <span>Unallocated payments</span>
+            <strong>@Overview.AllocationSummary.UnallocatedPaymentValue.ToString("C")</strong>
+            <small>
+                @Overview.AllocationSummary.UnallocatedPaymentCount payments need review
+            </small>
+        </article>
+    </section>
+
+    @if (!Overview.AllocationSummary.IsComplete)
+    {
+        <div class="alert alert-warning dashboard-warning">
+            @Overview.AllocationSummary.UnallocatedPaymentCount payments have
+            @Overview.AllocationSummary.UnallocatedPaymentValue.ToString("C")
+            that is not represented by imported event or membership data.
+            <a href="@UnresolvedUrl">View allocation details</a>.
+        </div>
+    }
+
+    <section class="content-grid">
+        <article class="panel">
+            <div class="panel-heading">
+                <div>
+                    <span class="eyebrow">Start here</span>
+                    <h2>Monthly workflow</h2>
+                </div>
+            </div>
+            <ol class="workflow-list">
+                <li>
+                    <span>1</span>
+                    <div>
+                        <strong>Import Bookwhen exports</strong>
+                        <p>Upload the events file first, followed by the payments file.</p>
+                    </div>
+                </li>
+                <li>
+                    <span>2</span>
+                    <div>
+                        <strong>Review unresolved bookings</strong>
+                        <p>Identify event values that Bookwhen could not allocate safely.</p>
+                    </div>
+                </li>
+                <li>
+                    <span>3</span>
+                    <div>
+                        <strong>Check reports</strong>
+                        <p>Use the event and membership reports for detailed payment records.</p>
+                    </div>
+                </li>
+            </ol>
+        </article>
+
+        <article class="panel action-panel">
+            <span class="eyebrow">Quick actions</span>
+            <h2>Review @MonthLabel</h2>
+            <a class="action-link" href="/imports">
+                <span>Import monthly CSV files</span>
+                <strong>Open</strong>
+            </a>
+            <a class="action-link" href="@EventsUrl">
+                <span>View payments by event</span>
+                <strong>Open</strong>
+            </a>
+            <a class="action-link" href="@MembershipsUrl">
+                <span>View membership payments</span>
+                <strong>Open</strong>
+            </a>
+            <a class="action-link" href="@UnresolvedUrl">
+                <span>Review unallocated payments</span>
+                <strong>@Overview.AllocationSummary.UnallocatedPaymentCount</strong>
+            </a>
+        </article>
+    </section>
+}
+
+@code {
+    private bool IsLoading { get; set; } = true;
+    private string? ErrorMessage { get; set; }
+    private MonthlyOverviewResult? Overview { get; set; }
+    private DateOnly SelectedMonth { get; set; } =
+        new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1)
+            .AddMonths(-1);
+
+    private DateOnly StartDate => SelectedMonth;
+
+    private DateOnly EndDate =>
+        SelectedMonth.AddMonths(1).AddDays(-1);
+
+    private string SelectedMonthValue =>
+        SelectedMonth.ToString("yyyy-MM");
+
+    private string MonthLabel =>
+        SelectedMonth.ToString("MMMM yyyy");
+
+    private string EventsUrl =>
+        $"/events-by-name?startDate={StartDate:yyyy-MM-dd}" +
+        $"&endDate={EndDate:yyyy-MM-dd}";
+
+    private string MembershipsUrl =>
+        $"/memberships?startDate={StartDate:yyyy-MM-dd}" +
+        $"&endDate={EndDate:yyyy-MM-dd}";
+
+    private string UnresolvedUrl =>
+        $"/unresolved?startDate={StartDate:yyyy-MM-dd}" +
+        $"&endDate={EndDate:yyyy-MM-dd}";
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadAsync();
+    }
+
+    private async Task ChangeMonthAsync(ChangeEventArgs args)
+    {
+        if (DateOnly.TryParseExact(
+                $"{args.Value}-01",
+                "yyyy-MM-dd",
+                out DateOnly selectedMonth))
+        {
+            SelectedMonth = selectedMonth;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+
+        try
+        {
+            Overview = await ApiClient.GetMonthlyOverviewAsync(
+                StartDate,
+                EndDate);
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage =
+                $"The dashboard could not be loaded. {exception.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+}

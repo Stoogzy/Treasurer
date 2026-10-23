@@ -2,6 +2,7 @@
 using Treasurer.Application.Common.AppRequests;
 using Treasurer.Application.Common.Interfaces;
 using Treasurer.Core.Entities;
+using Treasurer.Core.Enums;
 
 namespace Treasurer.Application.Payments.ListMembershipPayments;
 
@@ -9,8 +10,6 @@ public sealed record ListAllMembershipPaymentsQuery(
     DateOnly StartDate,
     DateOnly EndDate)
 {
-    private const string MembershipPaymentMethod = "Membership subscription";
-
     public sealed record PaymentItem(
         Guid PaymentId,
         DateTime PaymentDate,
@@ -36,8 +35,8 @@ public sealed record ListAllMembershipPaymentsQuery(
             List<PaymentEntity> payments = await dbContext.Payments
                 .AsNoTracking()
                 .Where(payment =>
-                    payment.PaymentMethod ==
-                    MembershipPaymentMethod &&
+                    payment.PaymentCategory ==
+                    PaymentCategory.Membership &&
                     payment.PaymentDate >= startDate &&
                     payment.PaymentDate < endDateExclusive)
                 .Include(payment => payment.Booking)
@@ -75,6 +74,46 @@ public sealed record ListAllMembershipPaymentsQuery(
                         paidFor,
                         payment.PaymentValue);
                 })
+                .ToList();
+
+            List<PaymentItem> mixedMembershipPayments =
+                await dbContext.BookingEvents
+                    .AsNoTracking()
+                    .Where(bookingEvent =>
+                        bookingEvent.EventValueSource ==
+                            EventValueSource.InitialMembershipPayment &&
+                        bookingEvent.EventValue > 0m &&
+                        bookingEvent.Booking.Payments.Any(payment =>
+                            payment.PaymentCategory ==
+                                PaymentCategory.Mixed &&
+                            payment.PaymentDate >= startDate &&
+                            payment.PaymentDate <
+                                endDateExclusive))
+                    .Select(bookingEvent => new PaymentItem(
+                        bookingEvent.Id,
+                        bookingEvent.Booking.Payments
+                            .Where(payment =>
+                                payment.PaymentCategory ==
+                                    PaymentCategory.Mixed &&
+                                payment.PaymentDate >= startDate &&
+                                payment.PaymentDate <
+                                    endDateExclusive)
+                            .OrderByDescending(payment =>
+                                payment.PaymentDate)
+                            .Select(payment =>
+                                payment.PaymentDate)
+                            .First(),
+                        bookingEvent.Booking.BookingReference,
+                        bookingEvent.Attendee
+                            .AttendeeCustomerName,
+                        bookingEvent.EventValue!.Value))
+                    .ToListAsync(cancellationToken);
+
+            results.AddRange(mixedMembershipPayments);
+            results = results
+                .OrderByDescending(payment =>
+                    payment.PaymentDate)
+                .ThenBy(payment => payment.PaidFor)
                 .ToList();
 
             return AppResponse<Result>.Ok(

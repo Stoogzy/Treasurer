@@ -1,0 +1,186 @@
+@page "/events-by-name"
+@inject TreasurerApiClient ApiClient
+
+<PageTitle>Events by name | Treasurer</PageTitle>
+
+<div class="page-heading dashboard-heading">
+    <div>
+        <span class="eyebrow">Reports</span>
+        <h1>Events by name</h1>
+        <p>Review event types that occurred during the selected month.</p>
+    </div>
+
+    <label class="month-selector">
+        <span>Reporting month</span>
+        <input type="month"
+               value="@SelectedMonthValue"
+               @onchange="ChangeMonthAsync" />
+    </label>
+</div>
+
+@if (IsLoading)
+{
+    <div class="loading-panel">Loading event names...</div>
+}
+else if (ErrorMessage is not null)
+{
+    <div class="alert alert-error">@ErrorMessage</div>
+}
+else if (Result is not null)
+{
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <span class="eyebrow">@MonthLabel</span>
+                <h2>@FilteredEventNames.Count event types</h2>
+            </div>
+            <input class="search-input"
+                   type="search"
+                   placeholder="Search event names"
+                   @bind="SearchText"
+                   @bind:event="oninput" />
+        </div>
+
+        <div class="event-list">
+            @foreach (EventNameItem eventName in FilteredEventNames)
+            {
+                <a class="event-row"
+                   href="@GetEventNameUrl(eventName.EventName)">
+                    <div>
+                        <strong>@eventName.EventName</strong>
+                        <span class="event-schedule">
+                            @OccurrenceLabel(eventName)
+                        </span>
+                        <span class="event-metadata">
+                            @FormatDateRange(eventName)
+                        </span>
+                    </div>
+                    <span class="row-action">View all sessions</span>
+                </a>
+            }
+        </div>
+
+        @if (Result.EventNames.Count == 0)
+        {
+            <div class="empty-state">
+                No events occurred during @MonthLabel.
+            </div>
+        }
+        else if (FilteredEventNames.Count == 0)
+        {
+            <div class="empty-state">
+                No event names match this search.
+            </div>
+        }
+    </section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "startDate")]
+    public DateOnly? StartDateQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "endDate")]
+    public DateOnly? EndDateQuery { get; set; }
+
+    private EventNamesResult? Result { get; set; }
+    private bool IsLoading { get; set; } = true;
+    private string? ErrorMessage { get; set; }
+    private string SearchText { get; set; } = string.Empty;
+    private DateOnly SelectedMonth { get; set; } =
+        new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1)
+            .AddMonths(-1);
+
+    private DateOnly StartDate => SelectedMonth;
+
+    private DateOnly EndDate =>
+        SelectedMonth.AddMonths(1).AddDays(-1);
+
+    private string SelectedMonthValue =>
+        SelectedMonth.ToString("yyyy-MM");
+
+    private string MonthLabel =>
+        SelectedMonth.ToString("MMMM yyyy");
+
+    private IReadOnlyList<EventNameItem> FilteredEventNames =>
+        Result?.EventNames
+            .Where(item =>
+                string.IsNullOrWhiteSpace(SearchText) ||
+                item.EventName.Contains(
+                    SearchText,
+                    StringComparison.OrdinalIgnoreCase))
+            .ToList()
+        ?? [];
+
+    protected override Task OnInitializedAsync()
+    {
+        if (StartDateQuery.HasValue)
+        {
+            SelectedMonth = new DateOnly(
+                StartDateQuery.Value.Year,
+                StartDateQuery.Value.Month,
+                1);
+        }
+
+        return LoadAsync();
+    }
+
+    private async Task ChangeMonthAsync(ChangeEventArgs args)
+    {
+        if (DateOnly.TryParseExact(
+                $"{args.Value}-01",
+                "yyyy-MM-dd",
+                out DateOnly selectedMonth))
+        {
+            SelectedMonth = selectedMonth;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+
+        try
+        {
+            Result = await ApiClient.GetEventNamesAsync(
+                StartDate,
+                EndDate);
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage =
+                $"Events by name could not be loaded. {exception.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private string GetEventNameUrl(string eventName)
+    {
+        return "/events-by-name/detail" +
+               $"?eventName={Uri.EscapeDataString(eventName)}" +
+               $"&startDate={StartDate:yyyy-MM-dd}" +
+               $"&endDate={EndDate:yyyy-MM-dd}";
+    }
+
+    private static string OccurrenceLabel(EventNameItem item)
+    {
+        return item.OccurrenceCount == 1
+            ? "1 session"
+            : $"{item.OccurrenceCount} sessions";
+    }
+
+    private static string FormatDateRange(EventNameItem item)
+    {
+        if (item.FirstOccurrence.Date ==
+            item.LastOccurrence.Date)
+        {
+            return item.FirstOccurrence.ToString("ddd d MMM yyyy");
+        }
+
+        return $"{item.FirstOccurrence:d MMM}-{item.LastOccurrence:d MMM yyyy}";
+    }
+}

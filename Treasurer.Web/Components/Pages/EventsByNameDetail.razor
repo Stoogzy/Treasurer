@@ -1,0 +1,260 @@
+@page "/events-by-name/detail"
+@inject TreasurerApiClient ApiClient
+
+<PageTitle>@(Result?.EventName ?? "Events by name") | Treasurer</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <a class="back-link" href="@BackUrl">Back to events by name</a>
+        <span class="eyebrow">Event series</span>
+        <h1>@(Result?.EventName ?? EventName)</h1>
+        @if (Result is not null)
+        {
+            <p>
+                @SessionCountLabel(Result.Occurrences.Count) during
+                @Result.StartDate.ToString("MMMM yyyy").
+            </p>
+        }
+    </div>
+</div>
+
+@if (IsLoading)
+{
+    <div class="loading-panel">Loading event sessions...</div>
+}
+else if (ErrorMessage is not null)
+{
+    <div class="alert alert-error">@ErrorMessage</div>
+}
+else if (Result is not null)
+{
+    <section class="stat-grid stat-grid-compact">
+        <article class="stat-card stat-card-accent">
+            <span>Total allocated income</span>
+            <strong>@Result.TotalValue.ToString("C")</strong>
+            <small>Across @SessionCountLabel(Result.Occurrences.Count)</small>
+        </article>
+    </section>
+
+    <div class="event-occurrence-list">
+        @foreach (EventOccurrenceItem occurrence in Result.Occurrences)
+        {
+            <article class="event-occurrence">
+                <div class="occurrence-heading">
+                    <div>
+                        <span class="eyebrow">Session</span>
+                        <h2>@FormatSchedule(occurrence)</h2>
+                        @if (!string.IsNullOrWhiteSpace(occurrence.Location))
+                        {
+                            <p>@occurrence.Location</p>
+                        }
+                    </div>
+                    <div class="booking-value">
+                        <span>Allocated income</span>
+                        <strong>@occurrence.TotalValue.ToString("C")</strong>
+                        <small>
+                            @PaymentCountLabel(occurrence.Payments.Count)
+                        </small>
+                    </div>
+                </div>
+
+                @if (!occurrence.AllocationSummary.IsComplete)
+                {
+                    <div class="alert alert-warning">
+                        This session has
+                        @occurrence.AllocationSummary.UnresolvedEventCount
+                        unresolved allocations.
+                        <a href="@UnresolvedUrl">
+                            Review unresolved bookings
+                        </a>.
+                    </div>
+                }
+
+                <section class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="eyebrow">People who paid</span>
+                            <h3>@PaymentCountLabel(occurrence.Payments.Count)</h3>
+                        </div>
+                    </div>
+
+                    <div class="table-scroll">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Payment date</th>
+                                    <th>Paid by</th>
+                                    <th>Paid for</th>
+                                    <th>Reference</th>
+                                    <th>Guardian</th>
+                                    <th class="number">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (EventPaymentItem payment in occurrence.Payments)
+                                {
+                                    <tr>
+                                        <td>@payment.PaymentDate.ToString("d MMM yyyy")</td>
+                                        <td>@payment.PaidBy</td>
+                                        <td>@payment.PaidFor</td>
+                                        <td><span class="code">@payment.BookingReference</span></td>
+                                        <td>@GuardianLabel(payment.IsGuardianPayment)</td>
+                                        <td class="number strong">@payment.Value.ToString("C")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (occurrence.Payments.Count == 0)
+                    {
+                        <div class="empty-state">
+                            No event payments are allocated to this session.
+                        </div>
+                    }
+                </section>
+
+                <section class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="eyebrow">Full attendee list</span>
+                            <h3>@occurrence.Attendees.Count attendees</h3>
+                        </div>
+                    </div>
+
+                    <div class="table-scroll">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Attendee</th>
+                                    <th>Ticket</th>
+                                    <th>Ticket type</th>
+                                    <th>Reference</th>
+                                    <th>Guardian booking</th>
+                                    <th>Attended</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (EventAttendeeItem attendee in occurrence.Attendees)
+                                {
+                                    <tr>
+                                        <td class="strong">@attendee.AttendeeName</td>
+                                        <td>@attendee.TicketName</td>
+                                        <td>@attendee.TicketType</td>
+                                        <td><span class="code">@attendee.BookingReference</span></td>
+                                        <td>@GuardianLabel(attendee.IsGuardianBooking)</td>
+                                        <td>@AttendanceLabel(attendee.Attended)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </article>
+        }
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "eventName")]
+    public string EventName { get; set; } = string.Empty;
+
+    [SupplyParameterFromQuery(Name = "startDate")]
+    public DateOnly? StartDateQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "endDate")]
+    public DateOnly? EndDateQuery { get; set; }
+
+    private EventsByNameResult? Result { get; set; }
+    private bool IsLoading { get; set; } = true;
+    private string? ErrorMessage { get; set; }
+    private DateOnly StartDate { get; set; }
+    private DateOnly EndDate { get; set; }
+
+    private string BackUrl =>
+        $"/events-by-name?startDate={StartDate:yyyy-MM-dd}" +
+        $"&endDate={EndDate:yyyy-MM-dd}";
+
+    private string UnresolvedUrl =>
+        $"/unresolved?startDate={StartDate:yyyy-MM-dd}" +
+        $"&endDate={EndDate:yyyy-MM-dd}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        DateOnly previousMonth = new(
+            DateTime.Today.Year,
+            DateTime.Today.Month,
+            1);
+        previousMonth = previousMonth.AddMonths(-1);
+
+        StartDate = StartDateQuery ?? previousMonth;
+        EndDate = EndDateQuery ??
+            previousMonth.AddMonths(1).AddDays(-1);
+
+        IsLoading = true;
+        ErrorMessage = null;
+
+        try
+        {
+            Result = await ApiClient.GetEventsByNameAsync(
+                EventName,
+                StartDate,
+                EndDate);
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage =
+                $"Event sessions could not be loaded. {exception.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private static string FormatSchedule(
+        EventOccurrenceItem occurrence)
+    {
+        string start =
+            occurrence.StartsAt.ToString(
+                "dddd d MMMM yyyy, HH:mm");
+
+        return occurrence.EndsAt.HasValue
+            ? $"{start}-{occurrence.EndsAt.Value:HH:mm}"
+            : start;
+    }
+
+    private static string GuardianLabel(bool? isGuardian)
+    {
+        return isGuardian switch
+        {
+            true => "Yes",
+            false => "No",
+            null => "Unknown"
+        };
+    }
+
+    private static string AttendanceLabel(bool? attended)
+    {
+        return attended switch
+        {
+            true => "Yes",
+            false => "No",
+            null => "Not recorded"
+        };
+    }
+
+    private static string SessionCountLabel(int count)
+    {
+        return count == 1
+            ? "1 session"
+            : $"{count} sessions";
+    }
+
+    private static string PaymentCountLabel(int count)
+    {
+        return count == 1
+            ? "1 payment allocation"
+            : $"{count} payment allocations";
+    }
+}

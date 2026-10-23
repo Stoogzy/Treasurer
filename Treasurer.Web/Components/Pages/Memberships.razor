@@ -1,0 +1,196 @@
+@page "/memberships"
+@inject TreasurerApiClient ApiClient
+
+<PageTitle>Membership payments | Treasurer</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">Income report</span>
+        <h1>Membership payments</h1>
+        <p>Review membership subscription payments received during a selected period.</p>
+    </div>
+</div>
+
+<section class="panel filter-panel">
+    <label>
+        <span>Start date</span>
+        <input type="date" @bind="StartDate" />
+    </label>
+    <label>
+        <span>End date</span>
+        <input type="date" @bind="EndDate" />
+    </label>
+    <button class="button button-primary" @onclick="LoadAsync">
+        Apply dates
+    </button>
+</section>
+
+@if (IsLoading)
+{
+    <div class="loading-panel">Loading membership payments...</div>
+}
+else if (ErrorMessage is not null)
+{
+    <div class="alert alert-error">@ErrorMessage</div>
+}
+else if (Result is not null)
+{
+    <section class="stat-grid stat-grid-compact">
+        <article class="stat-card stat-card-accent">
+            <span>Membership income</span>
+            <strong>@Result.TotalValue.ToString("C")</strong>
+            <small>@Result.Payments.Count payments</small>
+        </article>
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <span class="eyebrow">Payment detail</span>
+                <h2>@FilteredPayments.Count payments</h2>
+            </div>
+            <div class="table-controls">
+                <label>
+                    <span>Search by name</span>
+                    <input class="search-input"
+                           type="search"
+                           placeholder="Enter a name"
+                           @bind="NameSearch"
+                           @bind:event="oninput" />
+                </label>
+                <label>
+                    <span>Order by</span>
+                    <select @bind="SortOrder">
+                        <option value="date-desc">Payment date</option>
+                        <option value="value-desc">Value: highest first</option>
+                        <option value="value-asc">Value: lowest first</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Payment date</th>
+                        <th>Paid for</th>
+                        <th>Reference</th>
+                        <th class="number">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (MembershipPaymentItem payment in FilteredPayments)
+                    {
+                        <tr>
+                            <td>@payment.PaymentDate.ToString("d MMM yyyy")</td>
+                            <td>@payment.PaidFor</td>
+                            <td><span class="code">@payment.BookingReference</span></td>
+                            <td class="number strong">@payment.Value.ToString("C")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Result.Payments.Count == 0)
+        {
+            <div class="empty-state">No membership payments were received in this date range.</div>
+        }
+        else if (FilteredPayments.Count == 0)
+        {
+            <div class="empty-state">No membership payments match this name.</div>
+        }
+    </section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "startDate")]
+    public DateOnly? StartDateQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "endDate")]
+    public DateOnly? EndDateQuery { get; set; }
+
+    private MembershipPaymentsResult? Result { get; set; }
+    private bool IsLoading { get; set; } = true;
+    private string? ErrorMessage { get; set; }
+    private string NameSearch { get; set; } = string.Empty;
+    private string SortOrder { get; set; } = "date-desc";
+    private DateOnly StartDate { get; set; } =
+        PreviousMonthStart;
+    private DateOnly EndDate { get; set; } =
+        PreviousMonthStart.AddMonths(1).AddDays(-1);
+
+    private static DateOnly PreviousMonthStart =>
+        new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1)
+            .AddMonths(-1);
+
+    private IReadOnlyList<MembershipPaymentItem> FilteredPayments
+    {
+        get
+        {
+            IEnumerable<MembershipPaymentItem> payments =
+                Result?.Payments ?? [];
+
+            if (!string.IsNullOrWhiteSpace(NameSearch))
+            {
+                payments = payments.Where(payment =>
+                    payment.PaidFor.Contains(
+                        NameSearch.Trim(),
+                        StringComparison.OrdinalIgnoreCase));
+            }
+
+            payments = SortOrder switch
+            {
+                "value-desc" => payments
+                    .OrderByDescending(payment => payment.Value)
+                    .ThenBy(payment => payment.PaidFor),
+                "value-asc" => payments
+                    .OrderBy(payment => payment.Value)
+                    .ThenBy(payment => payment.PaidFor),
+                _ => payments
+                    .OrderByDescending(payment => payment.PaymentDate)
+                    .ThenBy(payment => payment.PaidFor)
+            };
+
+            return payments.ToList();
+        }
+    }
+
+    protected override Task OnInitializedAsync()
+    {
+        StartDate = StartDateQuery ?? StartDate;
+        EndDate = EndDateQuery ?? EndDate;
+
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (EndDate < StartDate)
+        {
+            ErrorMessage =
+                "The end date must be on or after the start date.";
+            return;
+        }
+
+        IsLoading = true;
+        ErrorMessage = null;
+
+        try
+        {
+            Result = await ApiClient.GetMembershipPaymentsAsync(
+                StartDate,
+                EndDate);
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage =
+                $"Membership payments could not be loaded. {exception.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+}

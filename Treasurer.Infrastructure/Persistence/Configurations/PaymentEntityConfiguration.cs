@@ -36,6 +36,11 @@ internal sealed class PaymentEntityConfiguration : IEntityTypeConfiguration<Paym
             .HasPrecision(18, 2)
             .IsRequired();
 
+        builder.Property(x => x.PaymentCategory)
+            .IsRequired();
+
+        builder.HasIndex(x => x.PaymentCategory);
+
         builder.Property(x => x.CustomerName)
             .HasMaxLength(200);
 

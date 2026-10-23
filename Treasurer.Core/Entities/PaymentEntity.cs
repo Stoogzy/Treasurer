@@ -1,4 +1,6 @@
-﻿namespace Treasurer.Core.Entities;
+﻿using Treasurer.Core.Enums;
+
+namespace Treasurer.Core.Entities;
 
 public class PaymentEntity
 {
@@ -8,6 +10,7 @@ public class PaymentEntity
     public required string PaymentStatus { get; set; }
     public required string PaymentMethod { get; set; }
     public required decimal PaymentValue { get; set; }
+    public PaymentCategory PaymentCategory { get; set; }
     public string? CustomerName { get; set; }
     public string? PayerEmail { get; set; }
     public Guid? BookingId {  get; set; }

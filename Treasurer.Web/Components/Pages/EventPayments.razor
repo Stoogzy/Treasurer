@@ -1,0 +1,214 @@
+@page "/events/{EventId}"
+@inject TreasurerApiClient ApiClient
+
+<PageTitle>Event payments | Treasurer</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <a class="back-link" href="/events">Back to all events</a>
+        <span class="eyebrow">Event report</span>
+        <h1>@(Result?.EventName ?? "Event payments")</h1>
+        @if (Result is not null)
+        {
+            <p class="event-date">@FormatEventSchedule(Result)</p>
+            <p>@FormatEventDescription(Result)</p>
+        }
+    </div>
+</div>
+
+@if (IsLoading)
+{
+    <div class="loading-panel">Loading event payments...</div>
+}
+else if (ErrorMessage is not null)
+{
+    <div class="alert alert-error">@ErrorMessage</div>
+}
+else if (Result is not null)
+{
+    <section class="stat-grid stat-grid-compact">
+        <article class="stat-card stat-card-accent">
+            <span>Allocated income</span>
+            <strong>@Result.TotalValue.ToString("C")</strong>
+            <small>@Result.Payments.Count payment allocations</small>
+        </article>
+        <article class="stat-card @(Result.AllocationSummary.IsComplete ? "" : "stat-card-warning")">
+            <span>Allocation status</span>
+            <strong>@(Result.AllocationSummary.IsComplete ? "Complete" : "Needs review")</strong>
+            <small>@Result.AllocationSummary.UnresolvedEventCount unresolved event values</small>
+        </article>
+    </section>
+
+    @if (!Result.AllocationSummary.IsComplete)
+    {
+        <div class="alert alert-warning">
+            This total is incomplete. There are
+            @Result.AllocationSummary.UnresolvedEventCount unresolved allocations
+            across @Result.AllocationSummary.UnresolvedBookingCount bookings in this period.
+            <a href="@UnresolvedUrl">Review unresolved bookings</a>.
+        </div>
+    }
+
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <span class="eyebrow">People who paid</span>
+                <h2>@Result.Payments.Count payment allocations</h2>
+            </div>
+        </div>
+
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Payment date</th>
+                        <th>Paid by</th>
+                        <th>Paid for</th>
+                        <th>Reference</th>
+                        <th>Guardian</th>
+                        <th class="number">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (EventPaymentItem payment in Result.Payments)
+                    {
+                        <tr>
+                            <td>@payment.PaymentDate.ToString("d MMM yyyy")</td>
+                            <td>@payment.PaidBy</td>
+                            <td>@payment.PaidFor</td>
+                            <td><span class="code">@payment.BookingReference</span></td>
+                            <td>@GuardianLabel(payment.IsGuardianPayment)</td>
+                            <td class="number strong">@payment.Value.ToString("C")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Result.Payments.Count == 0)
+        {
+            <div class="empty-state">No matched payments were received in this date range.</div>
+        }
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <span class="eyebrow">Full attendee list</span>
+                <h2>@Result.Attendees.Count attendees</h2>
+            </div>
+        </div>
+
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Attendee</th>
+                        <th>Ticket</th>
+                        <th>Ticket type</th>
+                        <th>Reference</th>
+                        <th>Guardian booking</th>
+                        <th>Attended</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (EventAttendeeItem attendee in Result.Attendees)
+                    {
+                        <tr>
+                            <td class="strong">@attendee.AttendeeName</td>
+                            <td>@attendee.TicketName</td>
+                            <td>@attendee.TicketType</td>
+                            <td><span class="code">@attendee.BookingReference</span></td>
+                            <td>@GuardianLabel(attendee.IsGuardianBooking)</td>
+                            <td>@AttendanceLabel(attendee.Attended)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Result.Attendees.Count == 0)
+        {
+            <div class="empty-state">No attendees were imported for this event.</div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter]
+    public string EventId { get; set; } = string.Empty;
+
+    private EventPaymentsResult? Result { get; set; }
+    private bool IsLoading { get; set; } = true;
+    private string? ErrorMessage { get; set; }
+    private const string UnresolvedUrl = "/unresolved";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+
+        try
+        {
+            Result = await ApiClient.GetEventPaymentsAsync(
+                EventId);
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage =
+                $"Event payments could not be loaded. {exception.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private static string GuardianLabel(bool? isGuardian)
+    {
+        return isGuardian switch
+        {
+            true => "Yes",
+            false => "No",
+            null => "Unknown"
+        };
+    }
+
+    private static string AttendanceLabel(bool? attended)
+    {
+        return attended switch
+        {
+            true => "Yes",
+            false => "No",
+            null => "Not recorded"
+        };
+    }
+
+    private static string FormatEventDescription(EventPaymentsResult result)
+    {
+        return result.EventStartsAt.HasValue
+            ? $"Payment list and attendees for " +
+              $"{result.EventStartsAt.Value:dddd d MMMM yyyy} session."
+            : "Payment list and attendees for this session.";
+    }
+
+    private static string FormatEventSchedule(EventPaymentsResult result)
+    {
+        if (!result.EventStartsAt.HasValue)
+        {
+            return "Event date unavailable";
+        }
+
+        string start = result.EventStartsAt.Value
+            .ToString("dddd d MMMM yyyy, HH:mm");
+
+        return result.EventEndsAt.HasValue
+            ? $"{start}-{result.EventEndsAt.Value:HH:mm}"
+            : start;
+    }
+}

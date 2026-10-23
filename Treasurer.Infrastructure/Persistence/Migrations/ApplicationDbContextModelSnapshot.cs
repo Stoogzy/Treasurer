@@ -231,6 +231,9 @@ namespace Treasurer.Infrastructure.Persistence.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("nvarchar(320)");
 
+                    b.Property<int>("PaymentCategory")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("PaymentDate")
                         .HasPrecision(0)
                         .HasColumnType("datetime2(0)");
@@ -254,6 +257,8 @@ namespace Treasurer.Infrastructure.Persistence.Migrations
                     b.HasIndex("BookingId");
 
                     b.HasIndex("BookingReference");
+
+                    b.HasIndex("PaymentCategory");
 
                     b.HasIndex("PaymentDate");
 
