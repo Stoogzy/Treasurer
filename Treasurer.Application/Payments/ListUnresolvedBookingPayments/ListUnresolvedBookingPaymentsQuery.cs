@@ -25,7 +25,6 @@ public sealed record ListUnresolvedBookingPaymentsQuery(
         decimal? BookingPayment,
         decimal AllocatedValue,
         decimal? RemainingUnallocatedValue,
-        bool? IsGuardianBooking,
         string BookerName,
         string BookerEmail,
         IReadOnlyList<UnresolvedEventItem> Events);
@@ -93,7 +92,6 @@ public sealed record ListUnresolvedBookingPaymentsQuery(
                         booking.BookingPayment,
                         allocatedValue,
                         remainingUnallocatedValue,
-                        booking.IsGuardianBooking,
                         booking.Booker.ContactName,
                         booking.Booker.BookerEmail,
                         booking.BookingEvents

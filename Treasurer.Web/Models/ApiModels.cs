@@ -27,7 +27,6 @@ public sealed record EventPaymentItem(
     string BookingReference,
     string PaidBy,
     string PaidFor,
-    bool? IsGuardianPayment,
     decimal Value,
     int ValueSource);
 
@@ -37,8 +36,7 @@ public sealed record EventAttendeeItem(
     string BookingReference,
     string TicketName,
     string TicketType,
-    bool? Attended,
-    bool? IsGuardianBooking);
+    bool? Attended);
 
 public sealed record AllocationSummary(
     bool IsComplete,
@@ -118,7 +116,6 @@ public sealed record UnresolvedBookingItem(
     decimal? BookingPayment,
     decimal AllocatedValue,
     decimal? RemainingUnallocatedValue,
-    bool? IsGuardianBooking,
     string BookerName,
     string BookerEmail,
     IReadOnlyList<UnresolvedEventItem> Events);

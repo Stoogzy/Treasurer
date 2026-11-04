@@ -14,7 +14,6 @@ public sealed record ListAllPaymentsByEventQuery(string EventId)
         string BookingReference,
         string PaidBy,
         string PaidFor,
-        bool? IsGuardianPayment,
         decimal Value,
         EventValueSource ValueSource);
 
@@ -24,8 +23,7 @@ public sealed record ListAllPaymentsByEventQuery(string EventId)
         string BookingReference,
         string TicketName,
         string TicketType,
-        bool? Attended,
-        bool? IsGuardianBooking);
+        bool? Attended);
 
     public sealed record AllocationSummary(
         bool IsComplete,
@@ -84,8 +82,6 @@ public sealed record ListAllPaymentsByEventQuery(string EventId)
                     bookingEvent.Booking.Booker.ContactName,
                     PaidFor =
                         bookingEvent.Attendee.AttendeeCustomerName,
-                    IsGuardianPayment =
-                        bookingEvent.Booking.IsGuardianBooking,
                     Value = bookingEvent.EventValue!.Value,
                     ValueSource = bookingEvent.EventValueSource
                 })
@@ -101,7 +97,6 @@ public sealed record ListAllPaymentsByEventQuery(string EventId)
                     payment.PaymentCustomerName ??
                         payment.ContactName,
                     payment.PaidFor,
-                    payment.IsGuardianPayment,
                     payment.Value,
                     payment.ValueSource))
                 .ToList();
@@ -120,8 +115,7 @@ public sealed record ListAllPaymentsByEventQuery(string EventId)
                     bookingEvent.Booking.BookingReference,
                     bookingEvent.TicketName,
                     bookingEvent.TicketType,
-                    bookingEvent.Attended,
-                    bookingEvent.Booking.IsGuardianBooking))
+                    bookingEvent.Attended))
                 .ToListAsync(cancellationToken);
 
             List<Guid> unresolvedBookingIds = await dbContext.BookingEvents

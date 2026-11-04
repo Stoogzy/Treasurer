@@ -86,7 +86,6 @@ else if (Result is not null)
                                     <th>Paid by</th>
                                     <th>Paid for</th>
                                     <th>Reference</th>
-                                    <th>Guardian</th>
                                     <th class="number">Value</th>
                                 </tr>
                             </thead>
@@ -98,7 +97,6 @@ else if (Result is not null)
                                         <td>@payment.PaidBy</td>
                                         <td>@payment.PaidFor</td>
                                         <td><span class="code">@payment.BookingReference</span></td>
-                                        <td>@GuardianLabel(payment.IsGuardianPayment)</td>
                                         <td class="number strong">@payment.Value.ToString("C")</td>
                                     </tr>
                                 }
@@ -130,7 +128,6 @@ else if (Result is not null)
                                     <th>Ticket</th>
                                     <th>Ticket type</th>
                                     <th>Reference</th>
-                                    <th>Guardian booking</th>
                                     <th>Attended</th>
                                 </tr>
                             </thead>
@@ -142,7 +139,6 @@ else if (Result is not null)
                                         <td>@attendee.TicketName</td>
                                         <td>@attendee.TicketType</td>
                                         <td><span class="code">@attendee.BookingReference</span></td>
-                                        <td>@GuardianLabel(attendee.IsGuardianBooking)</td>
                                         <td>@AttendanceLabel(attendee.Attended)</td>
                                     </tr>
                                 }
@@ -224,15 +220,6 @@ else if (Result is not null)
             : start;
     }
 
-    private static string GuardianLabel(bool? isGuardian)
-    {
-        return isGuardian switch
-        {
-            true => "Yes",
-            false => "No",
-            null => "Unknown"
-        };
-    }
 
     private static string AttendanceLabel(bool? attended)
     {

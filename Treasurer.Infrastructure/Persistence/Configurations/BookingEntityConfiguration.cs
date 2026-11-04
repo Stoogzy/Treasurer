@@ -29,8 +29,6 @@ internal sealed class BookingEntityConfiguration : IEntityTypeConfiguration<Book
         builder.Property(x => x.BookingPayment)
             .HasPrecision(18, 2);
 
-        builder.Property(x => x.IsGuardianBooking);
-
         builder.HasIndex(x => x.BookerId);
 
         builder.HasOne(x => x.Booker)

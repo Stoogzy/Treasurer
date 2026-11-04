@@ -6,7 +6,6 @@ public class BookingEntity
     public required string BookwhenBookingId { get; set; }
     public required string BookingReference { get; set; }
     public decimal? BookingPayment { get; set; }
-    public bool? IsGuardianBooking { get; set; }
     public required Guid BookerId { get; set; }
 
     public ICollection<BookingEventEntity> BookingEvents { get; set; } = [];

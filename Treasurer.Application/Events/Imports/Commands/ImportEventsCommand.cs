@@ -214,7 +214,6 @@ public sealed record ImportEventsCommand(
                     BookwhenBookingId = row.BookingId.Trim(),
                     BookingReference = bookingReference,
                     BookingPayment = bookingPayment,
-                    IsGuardianBooking = GuardianBookingAssumption.Determine(bookingRows),
                     BookerId = booker.Id,
                     Booker = booker
                 };
@@ -226,7 +225,6 @@ public sealed record ImportEventsCommand(
                 booking.BookwhenBookingId = row.BookingId.Trim();
                 booking.BookingReference = bookingReference;
                 booking.BookingPayment = bookingPayment;
-                booking.IsGuardianBooking = GuardianBookingAssumption.Determine(bookingRows);
                 booking.BookerId = booker.Id;
                 booking.Booker = booker;
             }

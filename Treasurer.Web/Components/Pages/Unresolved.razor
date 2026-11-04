@@ -118,7 +118,6 @@ else if (Result is not null)
                                 @booking.AllocatedValue.ToString("C") allocated
                                 of @(booking.BookingPayment?.ToString("C") ?? "unknown") payment
                             </small>
-                            <small>Guardian: @GuardianLabel(booking.IsGuardianBooking)</small>
                         </div>
                     </div>
 
@@ -200,15 +199,5 @@ else if (Result is not null)
         {
             IsLoading = false;
         }
-    }
-
-    private static string GuardianLabel(bool? isGuardian)
-    {
-        return isGuardian switch
-        {
-            true => "Yes",
-            false => "No",
-            null => "Unknown"
-        };
     }
 }
