@@ -2,6 +2,7 @@
 using FluentValidation.Results;
 using Microsoft.EntityFrameworkCore;
 using Treasurer.Application.Common.AppRequests;
+using Treasurer.Application.Common.Imports.Assumptions;
 using Treasurer.Application.Common.Imports.Exceptions;
 using Treasurer.Application.Common.Imports.Models;
 using Treasurer.Application.Common.Interfaces;
@@ -213,7 +214,7 @@ public sealed record ImportEventsCommand(
                     BookwhenBookingId = row.BookingId.Trim(),
                     BookingReference = bookingReference,
                     BookingPayment = bookingPayment,
-                    IsGuardianBooking = DetermineGuardianBooking(bookingRows),
+                    IsGuardianBooking = GuardianBookingAssumption.Determine(bookingRows),
                     BookerId = booker.Id,
                     Booker = booker
                 };
@@ -225,7 +226,7 @@ public sealed record ImportEventsCommand(
                 booking.BookwhenBookingId = row.BookingId.Trim();
                 booking.BookingReference = bookingReference;
                 booking.BookingPayment = bookingPayment;
-                booking.IsGuardianBooking = DetermineGuardianBooking(bookingRows);
+                booking.IsGuardianBooking = GuardianBookingAssumption.Determine(bookingRows);
                 booking.BookerId = booker.Id;
                 booking.Booker = booker;
             }
@@ -281,11 +282,9 @@ public sealed record ImportEventsCommand(
             }
 
             bool isEntirePaymentMembership =
-                IsInitialMembershipBooking(bookingRows);
+                InitialMembershipBookingAssumption.Applies(bookingRows);
             bool hasMembershipComponent =
-                TryGetMixedMembershipValue(
-                    bookingRows,
-                    out _);
+                MixedMembershipBookingAssumption.TryGetMembershipValue(bookingRows, out _);
 
             List<PaymentEntity> relatedPayments = await dbContext.Payments
                 .Where(payment =>
@@ -312,162 +311,37 @@ public sealed record ImportEventsCommand(
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
 
-        private static bool? DetermineGuardianBooking(IReadOnlyList<BookwhenEventCsvRow> bookingRows)
-        {
-            bool hasMissingContactName = false;
-
-            foreach (BookwhenEventCsvRow row in bookingRows)
-            {
-                string? contactName = NormalizeOptionalValue(row.ContactName);
-
-                if (contactName is null)
-                {
-                    hasMissingContactName = true;
-                    continue;
-                }
-
-                if (!string.Equals(
-                        contactName,
-                        row.AttendeeCustomerName.Trim(),
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return hasMissingContactName ? null : false;
-        }
-
+        // Bookwhen's own attendance value always wins. The remaining checks apply the
+        // import assumptions in Common/Imports/Assumptions, in priority order.
         private static (decimal? Value, EventValueSource Source) DetermineEventValue(BookwhenEventCsvRow row, IReadOnlyList<BookwhenEventCsvRow> bookingRows)
         {
             if (row.CurrentAttendanceValue.HasValue)
             {
-                return (
-                    row.CurrentAttendanceValue.Value,
-                    EventValueSource.BookwhenAttendanceValue);
+                return (row.CurrentAttendanceValue.Value, EventValueSource.BookwhenAttendanceValue);
             }
 
-            if (IsInitialMembershipBooking(bookingRows))
+            if (InitialMembershipBookingAssumption.Applies(bookingRows))
             {
-                return (
-                    0m,
-                    EventValueSource.InitialMembershipPayment);
+                return (0m, EventValueSource.InitialMembershipPayment);
             }
 
-            if (TryGetMixedMembershipValue(
-                    bookingRows,
-                    out decimal mixedMembershipValue) &&
-                IsMixedMembershipRow(row))
+            if (MixedMembershipBookingAssumption.IsMembershipRow(row) &&
+                MixedMembershipBookingAssumption.TryGetMembershipValue(bookingRows, out decimal mixedMembershipValue))
             {
-                return (
-                    mixedMembershipValue,
-                    EventValueSource.InitialMembershipPayment);
+                return (mixedMembershipValue, EventValueSource.InitialMembershipPayment);
             }
 
-            if (IsMembershipIncludedRecreationalSession(
-                    row,
-                    bookingRows))
+            if (MembershipIncludedRecreationalSessionAssumption.Applies(row, bookingRows))
             {
                 return (0m, EventValueSource.MembershipIncluded);
             }
 
-            int distinctEventCount = bookingRows
-                .Select(bookingRow => bookingRow.EventId)
-                .Distinct(StringComparer.Ordinal)
-                .Count();
-
-            if (bookingRows.Count == 1 &&
-                distinctEventCount == 1 &&
-                row.BookingPayment.HasValue)
+            if (SingleEventBookingAssumption.TryGetEventValue(row, bookingRows, out decimal singleEventValue))
             {
-                return (
-                    row.BookingPayment.Value,
-                    EventValueSource.SingleEventBookingPayment);
+                return (singleEventValue, EventValueSource.SingleEventBookingPayment);
             }
 
             return (null, EventValueSource.Unresolved);
-        }
-
-        private static bool IsInitialMembershipBooking(
-            IReadOnlyList<BookwhenEventCsvRow> bookingRows)
-        {
-            bool hasPositiveBookingPayment = bookingRows.Any(
-                row => row.BookingPayment is > 0m);
-
-            bool hasNoTicketOrAttendanceValues = bookingRows.All(
-                row =>
-                    !row.TicketFaceValue.HasValue &&
-                    !row.TicketCurrentValue.HasValue &&
-                    !row.CurrentAttendanceValue.HasValue);
-
-            return hasPositiveBookingPayment &&
-                   hasNoTicketOrAttendanceValues;
-        }
-
-        private static bool TryGetMixedMembershipValue(
-            IReadOnlyList<BookwhenEventCsvRow> bookingRows,
-            out decimal membershipValue)
-        {
-            membershipValue = 0m;
-
-            List<BookwhenEventCsvRow> membershipRows = bookingRows
-                .Where(IsMixedMembershipRow)
-                .ToList();
-
-            if (membershipRows.Count != 1 ||
-                !bookingRows.Any(row =>
-                    row.CurrentAttendanceValue.HasValue))
-            {
-                return false;
-            }
-
-            decimal? bookingPayment = bookingRows
-                .Select(row => row.BookingPayment)
-                .FirstOrDefault(value => value.HasValue);
-
-            if (!bookingPayment.HasValue)
-            {
-                return false;
-            }
-
-            decimal knownValue = bookingRows
-                .Where(row =>
-                    row.CurrentAttendanceValue.HasValue)
-                .Sum(row =>
-                    row.CurrentAttendanceValue!.Value);
-
-            membershipValue = bookingPayment.Value - knownValue;
-
-            return membershipValue > 0m;
-        }
-
-        private static bool IsMixedMembershipRow(
-            BookwhenEventCsvRow row)
-        {
-            return !row.TicketFaceValue.HasValue &&
-                   !row.TicketCurrentValue.HasValue &&
-                   !row.CurrentAttendanceValue.HasValue &&
-                   row.TicketName.Contains(
-                       "League player",
-                       StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool IsMembershipIncludedRecreationalSession(
-            BookwhenEventCsvRow row,
-            IReadOnlyList<BookwhenEventCsvRow> bookingRows)
-        {
-            bool hasNoBookingPayment = bookingRows.All(
-                bookingRow =>
-                    !bookingRow.BookingPayment.HasValue ||
-                    bookingRow.BookingPayment.Value == 0m);
-
-            return hasNoBookingPayment &&
-                   row.EventTitle.Contains(
-                       "Recreational",
-                       StringComparison.OrdinalIgnoreCase) &&
-                   row.TicketName.Contains(
-                       "League Player",
-                       StringComparison.OrdinalIgnoreCase);
         }
     }
 }
